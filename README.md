@@ -92,9 +92,32 @@ uses the service duration, excludes current and past slots, and permits booking
 through the date `booking_horizon_days` ahead (inclusive). Staff availability
 records are required for a staff member to have bookable slots on a date.
 
-Slot assignment and booking creation, guarded status transitions, transactional
-audit/outbox creation, queue calculation, dashboard authentication
-and authorization, WhatsApp conversations, provider integration, and durable jobs
-remain to be implemented. Enums define stored states; they do not yet implement
-the booking state machine. Timing, opening-hours, and queue-order guards belong
-in those booking workflows.
+`Bookings::Create` rechecks a selected staff member's slot under a row lock, then
+creates a confirmed booking with price and duration snapshots and a `booking_created`
+audit event in one transaction. PostgreSQL overlap constraints remain the final guard.
+The service accepts a customer, service, staff member, start time, optional customer
+name/source, and an injectable current time. It does not yet expose a web or WhatsApp
+interface.
+
+`Bookings::Transition` handles arrival (`confirmed` to `waiting`), start (`waiting` to
+`in_progress`), and completion (`in_progress` to `completed`). Each change locks the
+booking, checks its current state and timing, updates its timestamp, and records an
+audit event in one transaction. Starting also locks the staff member and translates
+the one-service-per-barber database constraint into an invalid transition.
+
+`Bookings::Queue` returns the current service, waiting bookings ordered by scheduled
+slot time, and confirmed bookings ordered by scheduled time for one barber and local
+service date. Queue positions are calculated from scheduled time, not arrival time.
+Starting service is restricted to the first waiting booking. Walk-ins book an available
+slot through `Bookings::Create` and join the same queue after check-in; they do not use
+a separate queue.
+
+Cancellation/no-show transitions, dashboard authentication and authorization, WhatsApp
+conversations, and provider delivery remain to be implemented. `Notifications::Enqueue`
+creates a deduplicated notification record in the same transaction as supported booking
+events. It snapshots confirmation and queue-update text; queue updates are suppressed
+when the customer's preference is disabled. No WhatsApp provider or delivery worker is
+connected yet. After a no-show, the newly open time should be offered to customers with
+later bookings when their service fits; an acceptance must recheck availability and
+claim the time transactionally. Enums define stored states; they do not by themselves
+implement the remaining booking state machine.
