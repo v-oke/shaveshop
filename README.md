@@ -71,19 +71,50 @@ Requires Ruby 3.3.3 and PostgreSQL with the btree_gist extension available.
 ```sh
 bundle install
 bin/rails db:create db:migrate
-bin/rails test test/models test/services
+bin/rails test
 ```
 
 Use `DATABASE_URL` for a custom database connection, or PostgreSQL's `PGHOST`,
 `PGPORT`, and `PGUSER` environment variables. The migration creates btree_gist,
 so the database role must have permission to enable that extension.
 
-The model tests cover snapshots, shop ownership, overlapping and adjacent
-reservations, active customer/day uniqueness, and one in-progress service. The
-availability service tests cover slot boundaries, staff availability, booking
-conflicts, and the booking horizon.
+The tests cover domain constraints, availability, booking creation, central salon
+selection, QR/link generation, and webhook intake.
 
 ## Later steps
+
+The platform uses one central WhatsApp Business number. Set `WHATSAPP_BUSINESS_NUMBER`
+to that number in international digits without a leading `+` (for example,
+`254700000000`) and `WHATSAPP_PHONE_NUMBER_ID` to its Meta phone number ID. Each salon
+has a unique `booking_code`; `Salon#booking_link` builds its `wa.me` link and
+`Salon#booking_qr_svg` generates a standalone SVG QR code for that link. The link
+prefills `BOOK <CODE>` and the customer still has to press Send. These methods are
+available now; the owner dashboard that will display them is a later stage.
+
+Configure these additional variables for the webhook:
+
+- `WHATSAPP_APP_SECRET`: Meta app secret, used to verify `X-Hub-Signature-256`.
+- `WHATSAPP_WEBHOOK_VERIFY_TOKEN`: a secret string you choose and enter in Meta's webhook setup.
+- `WHATSAPP_ACCESS_TOKEN`: token authorized to send from the central business number.
+
+In the Meta app's WhatsApp webhook configuration, use the public HTTPS URL
+`https://<your-host>/webhooks/whatsapp`, enter the same verify token, and subscribe to
+the `messages` field. Meta calls GET to verify the endpoint; incoming POSTs are checked
+against the app secret, deduplicated by provider message ID, then queued for processing.
+The receiver ignores events for phone number IDs other than `WHATSAPP_PHONE_NUMBER_ID`.
+
+To inspect a salon's shareable link and QR in the Rails console:
+
+```ruby
+salon = Salon.find_by!(booking_code: "ABC123")
+salon.booking_link
+File.write("tmp/#{salon.booking_code}.svg", salon.booking_qr_svg)
+```
+
+For local webhook testing, expose the Rails server through an HTTPS tunnel and use that
+public URL as the Meta callback. Unit and integration tests run without Meta credentials
+with `bin/rails test`. Salon identification is implemented; the interactive appointment
+booking conversation is the next stage.
 
 The `Availability::SlotFinder` service generates staff-specific slots by
 intersecting salon opening hours, staff availability for the local date, and
@@ -112,12 +143,27 @@ Starting service is restricted to the first waiting booking. Walk-ins book an av
 slot through `Bookings::Create` and join the same queue after check-in; they do not use
 a separate queue.
 
-Cancellation/no-show transitions, dashboard authentication and authorization, WhatsApp
-conversations, and provider delivery remain to be implemented. `Notifications::Enqueue`
-creates a deduplicated notification record in the same transaction as supported booking
-events. It snapshots confirmation and queue-update text; queue updates are suppressed
-when the customer's preference is disabled. No WhatsApp provider or delivery worker is
-connected yet. After a no-show, the newly open time should be offered to customers with
-later bookings when their service fits; an acceptance must recheck availability and
-claim the time transactionally. Enums define stored states; they do not by themselves
-implement the remaining booking state machine.
+`Notifications::Enqueue` creates a deduplicated notification record in the same
+transaction as supported booking events, then schedules delivery after commit. It
+snapshots confirmation and queue-update text; queue updates are suppressed when the
+customer's preference is disabled. `Notifications::DeliverJob` sends through
+`Whatsapp::CloudApi`, retries transient failures up to five attempts, and records the
+provider message ID and accepted/failed state. A delivery receipt webhook is still
+needed to move accepted messages to delivered.
+
+Set `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, and
+`WHATSAPP_BUSINESS_NUMBER`; optionally set `WHATSAPP_GRAPH_API_VERSION` (defaults to
+`v27.0`). Within 24 hours of a customer's last inbound message, delivery uses a text
+message. Outside that customer service window, configure an approved utility template
+with one body parameter (`{{1}}`) using `WHATSAPP_UTILITY_TEMPLATE_NAME`; set its
+locale with `WHATSAPP_TEMPLATE_LANGUAGE` (defaults to `en`). Keep credentials in environment
+configuration, not source control. Production uses Solid Queue; prepare its queue
+database and run `bin/jobs` alongside the web process.
+
+The central webhook, idempotent inbound storage, asynchronous salon identification, and
+salon switching are in place. The interactive WhatsApp booking flow, delivery receipt
+webhooks, reminders, and dashboard authentication remain to be implemented. After a
+no-show, the newly open time should be offered to customers with later bookings when
+their service fits; an acceptance must recheck availability and claim the time
+transactionally. Enums define stored states; they do not by themselves implement the
+remaining booking state machine.

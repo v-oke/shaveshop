@@ -2,7 +2,7 @@ require "test_helper"
 
 class Bookings::CreateTest < ActiveSupport::TestCase
   setup do
-    @salon = Salon.create!(name: "Blade", whatsapp_phone_number_id: "phone-1")
+    @salon = Salon.create!(name: "Blade", booking_code: "BLADE1")
     @staff = @salon.staff.create!(name: "David", email: "david@example.com", password: "password123", role: :barber)
     @service = @salon.services.create!(name: "Haircut", price_minor: 50_000, duration_minutes: 30)
     @customer = @salon.customers.create!(whatsapp_sender_id: "sender-1", display_name: "Sam")
@@ -58,7 +58,7 @@ class Bookings::CreateTest < ActiveSupport::TestCase
   end
 
   test "rejects a customer from another salon" do
-    other_salon = Salon.create!(name: "Other", whatsapp_phone_number_id: "phone-2")
+    other_salon = Salon.create!(name: "Other", booking_code: "OTHER1")
     other_customer = other_salon.customers.create!(whatsapp_sender_id: "sender-2")
 
     assert_raises(ArgumentError) do

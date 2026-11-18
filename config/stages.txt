@@ -1,6 +1,6 @@
 A good implementation sequence from the current state would be:
 
-WhatsApp outbound integration and notification delivery
+interactive WhatsApp booking flow
+WhatsApp delivery receipt webhooks
 no-show handling and earlier-slot offers
-WhatsApp inbound integration
 dashboard auth

@@ -2,7 +2,7 @@ require "test_helper"
 
 class BookingTest < ActiveSupport::TestCase
   setup do
-    @salon = Salon.create!(name: "Blade", whatsapp_phone_number_id: "phone-1")
+    @salon = Salon.create!(name: "Blade", booking_code: "BLADE1")
     @staff = @salon.staff.create!(name: "David", email: "david@example.com", password: "password123", role: :barber)
     @service = @salon.services.create!(name: "Haircut", price_minor: 50_000, duration_minutes: 30)
     @customer = @salon.customers.create!(whatsapp_sender_id: "sender-1")
@@ -24,7 +24,7 @@ class BookingTest < ActiveSupport::TestCase
   end
 
   test "rejects cross salon associations at model and database levels" do
-    other = Salon.create!(name: "Other", whatsapp_phone_number_id: "phone-2")
+    other = Salon.create!(name: "Other", booking_code: "OTHER1")
     customer = other.customers.create!(whatsapp_sender_id: "sender-2")
     booking = Booking.new(booking_attributes.merge(customer: customer))
     assert_not booking.valid?

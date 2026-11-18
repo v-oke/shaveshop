@@ -12,8 +12,8 @@ module Notifications
       return unless customer
 
       dedupe_key = "booking-event-#{event.id}-customer-#{customer.id}"
-      Notification.create_or_find_by!(dedupe_key: dedupe_key) do |notification|
-        notification.assign_attributes(
+      notification = Notification.create_or_find_by!(dedupe_key: dedupe_key) do |record|
+        record.assign_attributes(
           salon: event.salon,
           booking: booking,
           event: event,
@@ -23,6 +23,13 @@ module Notifications
           status: suppressed?(customer) ? :suppressed : :queued
         )
       end
+      if notification.queued?
+        notification_id = notification.id
+        ActiveRecord.after_all_transactions_commit do
+          DeliverJob.perform_later(notification_id)
+        end
+      end
+      notification
     end
 
     private

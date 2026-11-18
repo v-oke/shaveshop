@@ -1,5 +1,5 @@
 class InboundMessage < ApplicationRecord
-  belongs_to :salon
+  belongs_to :salon, optional: true
   validates :provider_message_id, presence: true, uniqueness: true
   validates :sender_id, :received_at, presence: true
   enum :processing_status, %w[pending processing processed failed].index_with(&:itself), validate: true

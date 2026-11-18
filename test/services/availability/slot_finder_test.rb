@@ -2,7 +2,7 @@ require "test_helper"
 
 class Availability::SlotFinderTest < ActiveSupport::TestCase
   setup do
-    @salon = Salon.create!(name: "Blade", whatsapp_phone_number_id: "phone-1")
+    @salon = Salon.create!(name: "Blade", booking_code: "BLADE1")
     @staff = @salon.staff.create!(name: "David", email: "david@example.com", password: "password123", role: :barber)
     @service = @salon.services.create!(name: "Haircut", price_minor: 50_000, duration_minutes: 30)
     @date = Date.new(2026, 10, 6)
@@ -73,7 +73,7 @@ class Availability::SlotFinderTest < ActiveSupport::TestCase
   end
 
   test "rejects a service from another salon" do
-    other_salon = Salon.create!(name: "Other", whatsapp_phone_number_id: "phone-2")
+    other_salon = Salon.create!(name: "Other", booking_code: "OTHER1")
     other_service = other_salon.services.create!(name: "Trim", price_minor: 10_000, duration_minutes: 15)
 
     assert_raises(ArgumentError) do

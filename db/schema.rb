@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_000100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -107,7 +107,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
     t.string "processing_status", default: "pending", null: false
     t.string "provider_message_id", null: false
     t.datetime "received_at", null: false
-    t.bigint "salon_id", null: false
+    t.bigint "salon_id"
     t.string "sender_id", null: false
     t.datetime "updated_at", null: false
     t.index ["provider_message_id"], name: "index_inbound_messages_on_provider_message_id", unique: true
@@ -158,6 +158,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
 
   create_table "salons", force: :cascade do |t|
     t.text "address"
+    t.string "booking_code", null: false
     t.integer "booking_horizon_days", default: 30, null: false
     t.datetime "created_at", null: false
     t.string "currency", default: "KES", null: false
@@ -166,8 +167,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
     t.integer "slot_step_minutes", default: 15, null: false
     t.string "timezone", default: "Africa/Nairobi", null: false
     t.datetime "updated_at", null: false
-    t.string "whatsapp_phone_number_id", null: false
-    t.index ["whatsapp_phone_number_id"], name: "index_salons_on_whatsapp_phone_number_id", unique: true
+    t.index ["booking_code"], name: "index_salons_on_booking_code", unique: true
     t.check_constraint "booking_horizon_days > 0 AND slot_step_minutes > 0 AND grace_minutes >= 0", name: "salons_check_0"
   end
 
@@ -214,6 +214,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
     t.check_constraint "ends_at > starts_at", name: "staff_availabilities_check_0"
   end
 
+  create_table "whatsapp_contacts", force: :cascade do |t|
+    t.bigint "active_salon_id"
+    t.datetime "created_at", null: false
+    t.bigint "pending_salon_id"
+    t.string "sender_id", null: false
+    t.string "state", default: "awaiting_salon", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active_salon_id"], name: "index_whatsapp_contacts_on_active_salon_id"
+    t.index ["pending_salon_id"], name: "index_whatsapp_contacts_on_pending_salon_id"
+    t.index ["sender_id"], name: "index_whatsapp_contacts_on_sender_id", unique: true
+    t.check_constraint "state::text = ANY (ARRAY['awaiting_salon'::character varying, 'choosing_previous_salon'::character varying, 'choosing_another_salon'::character varying, 'active'::character varying]::text[])", name: "whatsapp_contacts_state_check"
+  end
+
   add_foreign_key "booking_events", "bookings"
   add_foreign_key "booking_events", "bookings", column: ["salon_id", "booking_id"], primary_key: ["salon_id", "id"]
   add_foreign_key "booking_events", "salons"
@@ -243,4 +256,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
   add_foreign_key "staff_availabilities", "salons"
   add_foreign_key "staff_availabilities", "staff"
   add_foreign_key "staff_availabilities", "staff", column: ["salon_id", "staff_id"], primary_key: ["salon_id", "id"]
+  add_foreign_key "whatsapp_contacts", "salons", column: "active_salon_id"
+  add_foreign_key "whatsapp_contacts", "salons", column: "pending_salon_id"
 end
